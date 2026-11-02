@@ -1,0 +1,153 @@
+# CrowdFest full development environment (spec §13 Phase 1 & §4.1)
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: crowdfest-postgres
+    environment:
+      POSTGRES_USER: crowdfest
+      POSTGRES_PASSWORD: crowdfest
+      POSTGRES_DB: crowdfest
+    ports:
+      - "5432:5432"
+    volumes:
+      - crowdfest_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crowdfest -d crowdfest"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: crowdfest-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - crowdfest_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/Dockerfile.api
+    container_name: crowdfest-api
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgresql://crowdfest:crowdfest@postgres:5432/crowdfest
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/Dockerfile.web
+    container_name: crowdfest-web
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+    depends_on:
+      - api
+
+  orchestrator:
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/Dockerfile.worker
+    container_name: crowdfest-orchestrator
+    environment:
+      DATABASE_URL: postgresql://crowdfest:crowdfest@postgres:5432/crowdfest
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+    volumes:
+      - ./services/orchestrator/src:/app/services/orchestrator/src:ro
+    depends_on:
+      - api
+      - redis
+
+  browser-worker:
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/Dockerfile.worker
+    container_name: crowdfest-browser-worker
+    environment:
+      DATABASE_URL: postgresql://crowdfest:crowdfest@postgres:5432/crowdfest
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+    volumes:
+      - ./services/browser-worker/src:/app/services/browser-worker/src:ro
+    depends_on:
+      - redis
+
+  load-worker:
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/Dockerfile.worker
+    container_name: crowdfest-load-worker
+    environment:
+      DATABASE_URL: postgresql://crowdfest:crowdfest@postgres:5432/crowdfest
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+    volumes:
+      - ./services/load-worker/src:/app/services/load-worker/src:ro
+    depends_on:
+      - redis
+
+  ai-service:
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/Dockerfile.worker
+    container_name: crowdfest-ai-service
+    environment:
+      DATABASE_URL: postgresql://crowdfest:crowdfest@postgres:5432/crowdfest
+      REDIS_URL: redis://redis:6379
+      AI_PROVIDER: mock
+      NODE_ENV: production
+    volumes:
+      - ./services/ai-service/src:/app/services/ai-service/src:ro
+    depends_on:
+      - redis
+
+  metrics-worker:
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/Dockerfile.worker
+    container_name: crowdfest-metrics-worker
+    environment:
+      DATABASE_URL: postgresql://crowdfest:crowdfest@postgres:5432/crowdfest
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+    volumes:
+      - ./services/metrics-worker/src:/app/services/metrics-worker/src:ro
+    depends_on:
+      - redis
+
+  report-worker:
+    build:
+      context: ..
+      dockerfile: infrastructure/docker/Dockerfile.worker
+    container_name: crowdfest-report-worker
+    environment:
+      DATABASE_URL: postgresql://crowdfest:crowdfest@postgres:5432/crowdfest
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+    volumes:
+      - ./services/report-worker/src:/app/services/report-worker/src:ro
+    depends_on:
+      - redis
+
+volumes:
+  crowdfest_postgres_data:
+  crowdfest_redis_data:

@@ -1,0 +1,31 @@
+{
+  "name": "crowdfest",
+  "private": true,
+  "description": "AI-powered crowd simulation and application capacity testing platform.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "services/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/api & npm run dev --workspace=apps/web",
+    "db:generate": "drizzle-kit generate --config=packages/database/drizzle.config.ts",
+    "db:push": "drizzle-kit push --config=packages/database/drizzle.config.ts",
+    "db:studio": "drizzle-kit studio --config=packages/database/drizzle.config.ts",
+    "lint": "turbo run lint",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "turbo": "^1.13.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.4",
+    "pg": "^8.23.1"
+  }
+}
