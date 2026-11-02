@@ -1,0 +1,29 @@
+# CrowdFest API - Fastify control plane (spec §4.1, §9)
+FROM node:22-alpine
+
+WORKDIR /app
+
+# Install dependencies
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# Build workspace packages needed by API
+COPY packages ./packages
+WORKDIR /app/packages/database
+RUN npx tsc
+WORKDIR /app/packages/contracts
+RUN npx tsc
+WORKDIR /app
+
+# Copy API source
+COPY apps/api ./apps/api
+WORKDIR /app/apps/api
+RUN npx tsc
+
+EXPOSE 3001
+
+ENV DATABASE_URL=postgresql://crowdfest:crowdfest@postgres:5432/crowdfest
+ENV REDIS_URL=redis://redis:6379
+ENV NODE_ENV=production
+
+CMD ["node", "dist/index.js"]

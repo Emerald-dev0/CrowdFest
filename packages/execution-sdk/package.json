@@ -1,0 +1,17 @@
+{
+  "name": "@crowdfest/execution-sdk",
+  "private": true,
+  "version": "0.1.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@crowdfest/scenario-dsl": "^0.1.0",
+    "@crowdfest/contracts": "^0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}
