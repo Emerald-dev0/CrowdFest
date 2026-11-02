@@ -17,9 +17,7 @@
 }
 
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+  .text-balance { text-wrap: balance; }
   .glass {
     background: rgba(18, 18, 22, 0.6);
     backdrop-filter: blur(16px);
@@ -43,27 +41,8 @@
     background-size: 200% 200%;
     animation: gradient-x 8s ease infinite;
   }
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-  .no-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-}
-
-@layer components {
-  .accent-chip {
-    @apply px-3 py-1 rounded-full text-xs font-medium uppercase tracking-wider;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-  }
-  .nav-link {
-    @apply text-sm font-medium text-slate-400 hover:text-white transition px-3 py-2 rounded-lg;
-  }
-  .nav-link.active {
-    @apply text-white bg-white/5;
-  }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 }
 
 @keyframes float {
@@ -78,39 +57,20 @@
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
 }
-@keyframes pulse-slow {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+@keyframes animate-ping {
+  75%, 100% { transform: scale(2); opacity: 0; }
 }
-@keyframes scan {
-  0% { transform: translateY(-100%); }
-  100% { transform: translateY(100%); }
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-
-.animate-float {
-  animation: float 6s ease-in-out infinite;
-}
-.animate-float-delayed {
-  animation: float-delayed 8s ease-in-out infinite 2s;
-}
-.animate-pulse-slow {
-  animation: pulse-slow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
+.animate-float { animation: float 6s ease-in-out infinite; }
+.animate-float-delayed { animation: float-delayed 8s ease-in-out infinite 2s; }
+.animate-ping { animation: animate-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite; }
+.animate-fade-in { animation: fade-in 0.6s ease forwards; }
 .reveal {
   opacity: 0;
   transform: translateY(30px);
   transition: opacity 0.9s ease, transform 0.9s ease;
 }
-.reveal.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.animate-fade-in {
-  animation: fade-in 0.6s ease forwards;
-}
+.reveal.visible { opacity: 1; transform: translateY(0); }
