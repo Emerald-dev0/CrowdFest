@@ -219,3 +219,15 @@ node dist/index.js health
 node dist/index.js launch "Staging test" https://staging.example.com "users register and view dashboard"
 node dist/index.js list
 ```
+
+
+## Running the frontend
+
+```bash
+# from repo root
+npm install
+cd apps/web
+npm run dev
+```
+
+The dashboard runs on http://localhost:3000. Set `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WS_URL` to point at your API and orchestrator (defaults: http://localhost:3001 and ws://localhost:4000).
