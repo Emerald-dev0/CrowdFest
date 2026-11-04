@@ -208,3 +208,14 @@ CrowdFest is MIT-licensed and open source. See `docs/contributing.md` for the de
 ## License
 
 MIT
+
+## CLI
+
+A small developer CLI is included under `apps/cli`:
+
+```bash
+cd apps/cli && npm run build
+node dist/index.js health
+node dist/index.js launch "Staging test" https://staging.example.com "users register and view dashboard"
+node dist/index.js list
+```

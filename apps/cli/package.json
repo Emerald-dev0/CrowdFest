@@ -1,0 +1,14 @@
+{
+  "name": "@crowdfest/cli",
+  "private": true,
+  "version": "0.1.0",
+  "bin": { "crowdfest": "./dist/index.js" },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  }
+}

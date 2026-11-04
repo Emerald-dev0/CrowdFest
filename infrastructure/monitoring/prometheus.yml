@@ -1,0 +1,10 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: crowdfest-api
+    static_configs:
+      - targets: ['api:3001']
+  - job_name: crowdfest-orchestrator
+    static_configs:
+      - targets: ['orchestrator:4000']
