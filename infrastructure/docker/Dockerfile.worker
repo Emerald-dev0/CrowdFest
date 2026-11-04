@@ -1,36 +1,29 @@
-# Base image for CrowdFest workers (spec §4.1)
-# Used by: browser-worker, load-worker, metrics-worker, report-worker, ai-service, orchestrator
 FROM node:22-alpine
-
-# Install system deps for Playwright (browser-worker)
 RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont
-
 WORKDIR /app
-
 COPY package.json package-lock.json ./
 RUN npm ci
-
 COPY packages ./packages
-WORKDIR /app/packages/database
-RUN npx tsc
-WORKDIR /app/packages/contracts
-RUN npx tsc
-WORKDIR /app/packages/scenario-dsl
-RUN npx tsc
-WORKDIR /app/packages/scenario-compiler
-RUN npx tsc
-WORKDIR /app/packages/execution-sdk
-RUN npx tsc
-WORKDIR /app/packages/metrics
-RUN npx tsc
-WORKDIR /app/packages/config
-RUN npx tsc
-WORKDIR /app/packages/security
-RUN npx tsc
+WORKDIR /app/packages/contracts && RUN npx tsc
+WORKDIR /app/packages/config && RUN npx tsc
+WORKDIR /app/packages/security && RUN npx tsc
+WORKDIR /app/packages/database && RUN npx tsc
+WORKDIR /app/packages/scenario-dsl && RUN npx tsc
+WORKDIR /app/packages/metrics && RUN npx tsc
+WORKDIR /app/packages/execution-sdk && RUN npx tsc
+WORKDIR /app/packages/scenario-compiler && RUN npx tsc
+WORKDIR /app/packages/ai-service && RUN npx tsc
 WORKDIR /app
-
+COPY services ./services
+WORKDIR /app/services/orchestrator && RUN npx tsc
+WORKDIR /app/services/browser-worker && RUN npx tsc
+WORKDIR /app/services/load-worker && RUN npx tsc
+WORKDIR /app/services/metrics-worker && RUN npx tsc
+WORKDIR /app/services/report-worker && RUN npx tsc
+WORKDIR /app/services/ai-service && RUN npx tsc
+WORKDIR /app
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PLAYWRIGHT_BROWSERS_PATH=0
 ENV NODE_ENV=production
-
-EXPOSE 3000
+EXPOSE 4000
+CMD ["node", "services/orchestrator/dist/index.js"]
