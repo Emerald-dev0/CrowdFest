@@ -1,10 +1,13 @@
-"use client";
+'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { apiFetch } from '@/lib/api';
 
 type Step = 1 | 2 | 3 | 4;
 
 export default function NewSimulationPage() {
+  const router = useRouter();
   const [stepNum, setStepNum] = useState<number>(1);
   const step = stepNum as Step;
   const [form, setForm] = useState({
@@ -15,9 +18,29 @@ export default function NewSimulationPage() {
     virtualUsers: 50,
     durationSeconds: 120,
   });
+  const [launching, setLaunching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [launchedId, setLaunchedId] = useState<string | null>(null);
 
   const next = () => setStepNum((s) => (s < 4 ? s + 1 : s));
   const back = () => setStepNum((s) => (s > 1 ? s - 1 : s));
+
+  const launch = async () => {
+    setLaunching(true);
+    setError(null);
+    try {
+      const res = await apiFetch('/api/v1/simulations/quick', {
+        method: 'POST',
+        body: JSON.stringify(form),
+      });
+      setLaunchedId(res.simulation.id);
+      setStepNum(4);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLaunching(false);
+    }
+  };
 
   const steps = [
     { num: '01', title: 'Target & description' },
@@ -35,7 +58,6 @@ export default function NewSimulationPage() {
         </div>
       </div>
 
-      {/* Progress */}
       <div className="flex items-center gap-4 mb-10">
         {steps.map((s, i) => {
           const active = i + 1 === step;
@@ -85,9 +107,6 @@ export default function NewSimulationPage() {
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
                 />
               </div>
-              <p className="text-xs text-slate-500">
-                The AI will generate a proposed journey from this description. You review and approve before execution.
-              </p>
             </div>
             <div className="mt-10 flex justify-end">
               <button onClick={next} disabled={!form.name || !form.target} className="gradient-bg px-6 py-3 rounded-xl font-semibold text-white shadow-[0_0_30px_rgba(168,85,247,0.35)] hover:opacity-90 transition disabled:opacity-50 disabled:pointer-events-none">
@@ -143,25 +162,8 @@ export default function NewSimulationPage() {
                     <option value={600}>10 minutes</option>
                   </select>
                 </div>
-                <div className="glass p-4 rounded-xl border border-white/10">
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-blue-400">Browser sessions</span>
-                    <span className="text-white">{form.browserSessions}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-pink-400">Virtual users</span>
-                    <span className="text-white">{form.virtualUsers}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-400">Total simulated sessions</span>
-                    <span className="text-white">{form.browserSessions + form.virtualUsers}</span>
-                  </div>
-                </div>
               </div>
             </div>
-            <p className="text-xs text-slate-500 mt-4 max-w-md">
-              1,000 HTTP virtual users are not 1,000 real browsers. CrowdFest keeps them distinct — and runs both together.
-            </p>
             <div className="mt-10 flex justify-between">
               <button onClick={back} className="text-slate-400 hover:text-white transition">← Back</button>
               <button onClick={next} className="gradient-bg px-6 py-3 rounded-xl font-semibold text-white shadow-[0_0_30px_rgba(168,85,247,0.35)] hover:opacity-90 transition">
@@ -173,57 +175,19 @@ export default function NewSimulationPage() {
 
         {step === 3 && (
           <>
-            <h2 className="text-xl font-bold text-white mb-6">Review & approve</h2>
-            <div className="glass p-6 rounded-xl border border-white/10 mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Proposed journey</span>
-                <span className="text-xs text-slate-500">AI-generated · requires approval</span>
-              </div>
-              <div className="space-y-3 text-sm">
-                <div className="flex items-start gap-2 text-slate-300">
-                  <span className="text-blue-400">✓</span>
-                  <span>Open homepage</span>
-                </div>
-                <div className="flex items-start gap-2 text-slate-300">
-                  <span className="text-blue-400">✓</span>
-                  <span>Navigate to registration</span>
-                </div>
-                <div className="flex items-start gap-2 text-slate-300">
-                  <span className="text-blue-400">✓</span>
-                  <span>Submit registration form</span>
-                </div>
-                <div className="flex items-start gap-2 text-slate-300">
-                  <span className="text-blue-400">✓</span>
-                  <span>Verify dashboard loads</span>
-                </div>
-              </div>
-            </div>
+            <h2 className="text-xl font-bold text-white mb-6">Review & launch</h2>
             <div className="space-y-4 max-w-lg">
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">Name</label>
-                <p className="text-white">{form.name || 'Untitled simulation'}</p>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">Target</label>
-                <p className="text-white truncate">{form.target}</p>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">Browser sessions</label>
-                <p className="text-white">{form.browserSessions}</p>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">Virtual users</label>
-                <p className="text-white">{form.virtualUsers}</p>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">Duration</label>
-                <p className="text-white">{form.durationSeconds}s</p>
-              </div>
+              <div><label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Name</label><p className="text-white">{form.name}</p></div>
+              <div><label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Target</label><p className="text-white truncate">{form.target}</p></div>
+              <div><label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Browser sessions</label><p className="text-white">{form.browserSessions}</p></div>
+              <div><label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Virtual users</label><p className="text-white">{form.virtualUsers}</p></div>
+              <div><label className="block text-xs font-medium text-slate-400 mb-1 uppercase tracking-wider">Duration</label><p className="text-white">{form.durationSeconds}s</p></div>
             </div>
+            {error && <div className="mt-4 text-red-400 text-sm">{error}</div>}
             <div className="mt-10 flex justify-between">
               <button onClick={back} className="text-slate-400 hover:text-white transition">← Back</button>
-              <button onClick={next} className="gradient-bg px-6 py-3 rounded-xl font-semibold text-white shadow-[0_0_30px_rgba(168,85,247,0.35)] hover:opacity-90 transition">
-                Launch simulation →
+              <button onClick={launch} disabled={launching} className="gradient-bg px-6 py-3 rounded-xl font-semibold text-white shadow-[0_0_30px_rgba(168,85,247,0.35)] hover:opacity-90 transition disabled:opacity-50">
+                {launching ? 'Launching…' : 'Launch simulation →'}
               </button>
             </div>
           </>
@@ -237,12 +201,12 @@ export default function NewSimulationPage() {
               </div>
               <h2 className="text-2xl font-bold text-white mb-4">Simulation launched</h2>
               <p className="text-slate-400 mb-8">Your crowd test is running. Watch live metrics below.</p>
-              <a
-                href={`/simulations/${form.name.toLowerCase().replace(/\s+/g, '_')}`}
+              <button
+                onClick={() => launchedId && router.push(`/simulations/${launchedId}`)}
                 className="gradient-bg px-8 py-3 rounded-xl font-semibold text-white shadow-[0_0_30px_rgba(168,85,247,0.35)] hover:opacity-90 transition"
               >
                 View live monitoring →
-              </a>
+              </button>
             </div>
           </>
         )}
