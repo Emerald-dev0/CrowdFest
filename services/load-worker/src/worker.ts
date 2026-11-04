@@ -15,7 +15,7 @@ import * as schema from '@crowdfest/database';
 import { eq } from 'drizzle-orm';
 import { generateK6Script } from '@crowdfest/scenario-compiler';
 import { compileScenario } from '@crowdfest/scenario-compiler';
-import { loadConfig } from '@crowdfest/config';
+import { loadConfig, parseRedisUrl } from '@crowdfest/config';
 
 export interface HttpJobData {
   simulationId: string;
@@ -31,7 +31,7 @@ export async function runWorker() {
   const db = drizzle(pool, { schema });
 
   const queue = new Queue('crowdfest-http', {
-    connection: { host: 'localhost', port: 6379 },
+    connection: parseRedisUrl(config.redisUrl),
   });
 
   const worker = new Worker(
@@ -40,7 +40,7 @@ export async function runWorker() {
       const data = job.data as HttpJobData;
       return executeHttpLoad(data, db);
     },
-    { connection: { host: 'localhost', port: 6379 }, concurrency: 10 },
+    { connection: parseRedisUrl(config.redisUrl), concurrency: 10 },
   );
 
   console.log('[load-worker] started');

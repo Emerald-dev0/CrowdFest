@@ -33,3 +33,12 @@ export function loadConfig(): AppConfig {
     logLevel: (process.env.LOG_LEVEL as AppConfig['logLevel']) || 'info',
   };
 }
+
+export function parseRedisUrl(url: string): { host: string; port: number } {
+  try {
+    const u = new URL(url);
+    return { host: u.hostname || 'localhost', port: Number(u.port) || 6379 };
+  } catch {
+    return { host: 'localhost', port: 6379 };
+  }
+}

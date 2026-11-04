@@ -10,7 +10,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from '@crowdfest/database';
 import { eq } from "drizzle-orm";
 const t = schema as unknown as Record<string, any>;;
-import { loadConfig } from '@crowdfest/config';
+import { loadConfig, parseRedisUrl } from '@crowdfest/config';
 
 interface ReportJob {
   simulationId: string;
@@ -23,7 +23,7 @@ export async function runWorker() {
   const db = drizzle(pool, { schema: (schema as unknown as Record<string, any>) as any });
 
   const queue = new Queue('crowdfest-reports', {
-    connection: { host: 'localhost', port: 6379 },
+    connection: parseRedisUrl(config.redisUrl),
   });
 
   const worker = new Worker(
@@ -32,7 +32,7 @@ export async function runWorker() {
       const data = job.data as ReportJob;
       return generateReport(data, db);
     },
-    { connection: { host: 'localhost', port: 6379 }, concurrency: 5 },
+    { connection: parseRedisUrl(config.redisUrl), concurrency: 5 },
   );
 
   console.log('[report-worker] started');

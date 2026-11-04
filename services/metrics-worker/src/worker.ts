@@ -9,7 +9,7 @@ import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from '@crowdfest/database';
 import { eq } from 'drizzle-orm';
-import { loadConfig } from '@crowdfest/config';
+import { loadConfig, parseRedisUrl } from '@crowdfest/config';
 
 interface AggregateJob {
   simulationId: string;
@@ -23,7 +23,7 @@ export async function runWorker() {
   const db = drizzle(pool, { schema });
 
   const queue = new Queue('crowdfest-metrics', {
-    connection: { host: 'localhost', port: 6379 },
+    connection: parseRedisUrl(config.redisUrl),
   });
 
   const worker = new Worker(
@@ -32,7 +32,7 @@ export async function runWorker() {
       const data = job.data as AggregateJob;
       return aggregateMetrics(data, db);
     },
-    { connection: { host: 'localhost', port: 6379 }, concurrency: 10 },
+    { connection: parseRedisUrl(config.redisUrl), concurrency: 10 },
   );
 
   console.log('[metrics-worker] started');
