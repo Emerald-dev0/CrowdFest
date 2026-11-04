@@ -14,7 +14,12 @@
     "fastify": "^4.28.0",
     "fastify-plugin": "^4.5.1",
     "pg": "^8.11.0",
-    "zod": "^3.23.0"
+    "zod": "^3.23.0",
+    "@crowdfest/ai-service": "^0.1.0",
+    "@crowdfest/config": "^0.1.0",
+    "@crowdfest/security": "^0.1.0",
+    "bullmq": "^5.15.0",
+    "ioredis": "^5.4.0"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
