@@ -8,7 +8,7 @@ import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from '@crowdfest/database';
 import { eq } from 'drizzle-orm';
-import { loadConfig } from '@crowdfest/config';
+import { loadConfig, parseRedisUrl } from '@crowdfest/config';
 import { scenarioPlanner } from './planner';
 import { journeyBuilder } from './journey-builder';
 import { validationAgent } from './validation-agent';
@@ -35,7 +35,7 @@ export async function runWorker() {
   const db = drizzle(pool, { schema });
 
   const queue = new Queue('crowdfest-ai', {
-    connection: { host: 'localhost', port: 6379 },
+    connection: parseRedisUrl(config.redisUrl),
   });
 
   const worker = new Worker(
@@ -52,7 +52,7 @@ export async function runWorker() {
           throw new Error(`Unknown AI job: ${job.name}`);
       }
     },
-    { connection: { host: 'localhost', port: 6379 }, concurrency: 5 },
+    { connection: parseRedisUrl(config.redisUrl), concurrency: 5 },
   );
 
   console.log('[ai-service] started');
