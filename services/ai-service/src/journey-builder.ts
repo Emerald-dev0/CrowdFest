@@ -11,7 +11,7 @@ const BuilderOutputSchema = z.object({
   scenario: z.string(),
   steps: z.array(z.object({
     id: z.string(),
-    action: z.enum(['navigate', 'click', 'fill', 'wait', 'assert', 'extract']),
+    action: z.enum(['navigate', 'click', 'fill', 'wait', 'assert', 'extract', 'request', 'check', 'sleep']),
     target: z.string(),
     data: z.string().optional(),
     assertionType: z.enum(['element_visible', 'element_hidden', 'text_contains', 'url_matches', 'status_equals']).optional(),
@@ -74,15 +74,19 @@ Guidelines:
 
     try {
       const parsed = BuilderOutputSchema.parse(data);
+      const steps = parsed.steps.map((s, i) => ({
+        id: s.id || `step_${i}`,
+        action: s.action,
+        target: s.target,
+        data: s.data,
+        assertionType: s.assertionType,
+      }));
+      if ((parsed.executionType === 'http' || parsed.executionType === 'browser+http') && !steps.some((st: any) => st.action === 'request' || st.action === 'check')) {
+        steps.push({ id: 'http_load', action: 'request', target: '/', data: undefined, assertionType: undefined } as any);
+      }
       return {
         scenario: parsed.scenario,
-        steps: parsed.steps.map((s, i) => ({
-          id: s.id || `step_${i}`,
-          action: s.action,
-          target: s.target,
-          data: s.data,
-          assertionType: s.assertionType,
-        })),
+        steps,
         assertions: parsed.assertions,
         executionType: parsed.executionType as any,
         successCondition: parsed.successCondition,
@@ -113,9 +117,13 @@ Guidelines:
       return { id: `step_${i}`, action, target };
     });
 
+    const steps = [...js];
+    if (((journey.executionType as string) === 'http' || (journey.executionType as string) === 'browser+http' || !journey.executionType) && !steps.some((st: any) => st.action === 'request' || st.action === 'check')) {
+      steps.push({ id: 'http_load', action: 'request', target: '/', data: undefined, assertionType: undefined } as any);
+    }
     return {
       scenario: journey.name,
-      steps: js,
+      steps,
       assertions: journey.assertions.map((a) => ({ type: 'element_visible' as const, target: a })),
       executionType: (journey.executionType as any) || 'browser+http',
       successCondition: journey.description,

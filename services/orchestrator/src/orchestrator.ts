@@ -3,7 +3,7 @@
  * Manages the simulation state machine and coordinates execution workers.
  */
 
-import { Queue, Worker, Job } from 'bullmq';
+import { Queue, Worker, Job, QueueEvents } from 'bullmq';
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from '@crowdfest/database';
@@ -51,6 +51,10 @@ export function createOrchestrator() {
   let db: ReturnType<typeof drizzle>;
   let wss: WebSocketServer;
   let simulationQueue: Queue;
+  let browserQueue: Queue;
+  let httpQueue: Queue;
+  let browserQueueEvents: QueueEvents;
+  let httpQueueEvents: QueueEvents;
   let simulationWorker: Worker;
   let browserWorker: Worker;
   let httpWorker: Worker;
@@ -64,6 +68,10 @@ export function createOrchestrator() {
 
     const redis = parseRedisUrl(config.redisUrl);
     simulationQueue = new Queue('crowdfest-simulation', { connection: redis });
+    browserQueue = new Queue('crowdfest-browser', { connection: redis });
+    httpQueue = new Queue('crowdfest-http', { connection: redis });
+    browserQueueEvents = new QueueEvents('crowdfest-browser', { connection: redis });
+    httpQueueEvents = new QueueEvents('crowdfest-http', { connection: redis });
 
     simulationWorker = new Worker(
       'crowdfest-simulation',
@@ -107,6 +115,10 @@ export function createOrchestrator() {
   async function stop() {
     started = false;
     await simulationQueue?.close();
+    await browserQueue?.close();
+    await httpQueue?.close();
+    await browserQueueEvents?.close();
+    await httpQueueEvents?.close();
     await simulationWorker?.close();
     await browserWorker?.close();
     await httpWorker?.close();
@@ -187,53 +199,98 @@ export function createOrchestrator() {
       const browserSessions = Number(config?.engines?.browser?.sessions ?? 0);
       const virtualUsers = Number(config?.engines?.http?.virtualUsers ?? 0);
       const durationSeconds = Number(config?.workload?.durationSeconds ?? 120);
-      const totalTicks = Math.max(1, durationSeconds);
+      // Dispatch real execution jobs to workers.
+      const browserJobPromises: Promise<any>[] = [];
+      for (let i = 0; i < browserSessions; i++) {
+        const job = await browserQueue.add('browser.session', {
+          simulationId,
+          scenario,
+          baseUrl,
+          sessionIndex: i,
+        }, { removeOnComplete: 100, removeOnFail: 100 });
+        browserJobPromises.push(
+          job.waitUntilFinished(browserQueueEvents)
+            .then((res: any) => ({ index: i, result: res }))
+            .catch((err: any) => ({ index: i, error: err?.message || String(err) })),
+        );
+      }
 
-      let cancelled = false;
-      for (let i = 0; i < totalTicks; i++) {
-        const [current] = (await db.select().from(t.simulations).where(eq(t.simulations.id, simulationId))) as any[];
-        if (!current || current.status === 'cancelled' || current.status === 'stopping') {
-          cancelled = true;
-          break;
+      let httpJobPromise: Promise<any> | null = null;
+      if (virtualUsers > 0) {
+        const job = await httpQueue.add('http.load', {
+          simulationId,
+          scenario,
+          baseUrl,
+          virtualUsers,
+          durationSeconds,
+        }, { removeOnComplete: 100, removeOnFail: 100 });
+        httpJobPromise = job.waitUntilFinished(httpQueueEvents)
+          .then((res: any) => ({ result: res }))
+          .catch((err: any) => ({ error: err?.message || String(err) }));
+      }
+
+      await createSimulationEvent(simulationId, 'simulation.started', { browserSessions, virtualUsers });
+
+      const [browserResults, httpResult] = await Promise.all([
+        Promise.all(browserJobPromises),
+        httpJobPromise || Promise.resolve(null),
+      ]);
+
+      // Check cancellation
+      const [current] = (await db.select().from(t.simulations).where(eq(t.simulations.id, simulationId))) as any[];
+      if (current?.status === 'cancelled' || current?.status === 'stopping') {
+        await db.update(t.simulations).set({ status: 'cancelled', endedAt: new Date(), updatedAt: new Date() }).where(eq(t.simulations.id, simulationId));
+        await createSimulationEvent(simulationId, 'simulation.cancelled', {});
+        broadcast(simulationId, { status: 'cancelled' });
+        return;
+      }
+
+      // Record browser results
+      for (const br of browserResults) {
+        if (br.error) {
+          await createSimulationEvent(simulationId, 'browser.failed', { sessionIndex: br.index, error: br.error });
+        } else {
+          await createSimulationEvent(simulationId, 'browser.completed', { sessionIndex: br.index, result: br.result });
         }
+      }
 
-        const tProgress = (i + 1) / totalTicks;
-        const rps = Math.round(virtualUsers * (0.7 + 0.3 * tProgress) + Math.random() * Math.max(1, virtualUsers * 0.2));
-        const p95 = Math.round(100 + 150 * tProgress + Math.random() * 60);
-        const p99 = p95 + Math.round(Math.random() * 80);
-        const errRate = Math.max(0, 0.005 + Math.random() * 0.02);
-        const snapshot = {
-          activeHttpUsers: virtualUsers,
-          activeBrowserSessions: browserSessions,
-          totalSimulatedSessions: virtualUsers + browserSessions,
-          concurrentRequests: Math.round(rps / 2),
-          requestsPerSecond: rps,
-          p95LatencyMs: p95,
-          p99LatencyMs: p99,
-          errorRate: errRate,
-        };
-
+      // Record HTTP result + metrics
+      const httpFailed = httpResult?.error || (httpResult?.result && httpResult.result.success === false);
+      const httpError = httpResult?.error || httpResult?.result?.error;
+      if (httpFailed) {
+        await createSimulationEvent(simulationId, 'http.failed', { error: httpError });
+      } else if (httpResult?.result) {
+        const m = httpResult.result?.metrics || {};
         const now = new Date();
         const rows = [
-          { simulationId, metricName: 'requests_per_second', timeBucket: now, value: rps },
-          { simulationId, metricName: 'p95_latency_ms', timeBucket: now, value: p95 },
-          { simulationId, metricName: 'p99_latency_ms', timeBucket: now, value: p99 },
-          { simulationId, metricName: 'error_rate', timeBucket: now, value: errRate },
+          { simulationId, metricName: 'requests_per_second', timeBucket: now, value: Number(m.requestsPerSecond || 0) },
+          { simulationId, metricName: 'p95_latency_ms', timeBucket: now, value: Number(m.p95LatencyMs || 0) },
+          { simulationId, metricName: 'p99_latency_ms', timeBucket: now, value: Number(m.p99LatencyMs || 0) },
+          { simulationId, metricName: 'error_rate', timeBucket: now, value: Number(m.errorRate || 0) },
           { simulationId, metricName: 'active_http_users', timeBucket: now, value: virtualUsers },
           { simulationId, metricName: 'active_browser_sessions', timeBucket: now, value: browserSessions },
           { simulationId, metricName: 'total_simulated_sessions', timeBucket: now, value: virtualUsers + browserSessions },
         ];
         await db.insert(t.metricAggregates).values(rows);
-        await createSimulationEvent(simulationId, 'metrics.updated', { snapshot, tick: i + 1, totalTicks });
-        await broadcast(simulationId, { type: 'metrics', snapshot, tick: i + 1, totalTicks });
-
-        await sleep(1000);
+        await createSimulationEvent(simulationId, 'http.completed', { result: httpResult.result });
+        const snapshot = {
+          activeHttpUsers: virtualUsers,
+          activeBrowserSessions: browserSessions,
+          totalSimulatedSessions: virtualUsers + browserSessions,
+          concurrentRequests: Math.round((m.requestsPerSecond || 0) / 2),
+          requestsPerSecond: m.requestsPerSecond || 0,
+          p95LatencyMs: m.p95LatencyMs || 0,
+          p99LatencyMs: m.p99LatencyMs || 0,
+          errorRate: m.errorRate || 0,
+        };
+        await broadcast(simulationId, { type: 'metrics', snapshot });
       }
 
-      if (cancelled) {
-        await db.update(t.simulations).set({ status: 'cancelled', endedAt: new Date(), updatedAt: new Date() }).where(eq(t.simulations.id, simulationId));
-        await createSimulationEvent(simulationId, 'simulation.cancelled', {});
-        broadcast(simulationId, { status: 'cancelled' });
+      if (httpFailed) {
+        await setStatus(simulationId, 'failed');
+        await createSimulationEvent(simulationId, 'simulation.failed', { error: httpError });
+        await db.update(t.simulations).set({ endedAt: new Date(), updatedAt: new Date() }).where(eq(t.simulations.id, simulationId));
+        broadcast(simulationId, { status: 'failed', error: httpError });
         return;
       }
 
